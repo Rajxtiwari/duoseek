@@ -1,9 +1,20 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useAuthOverlay } from "@/components/auth/AuthProvider";
 import GlassContainer from "./GlassContainer";
 
 export default function Hero() {
+  const router = useRouter();
+  const { requireAuth } = useAuthOverlay();
+
+  const onShuffleClick = () => {
+    requireAuth("shuffle", () => {
+      router.push("/shuffle");
+    });
+  };
+
   return (
     <section className="min-h-screen flex items-center pt-20 pb-16 px-6 md:px-12 relative overflow-hidden">
       {/* Background gradient */}
@@ -50,7 +61,11 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
           >
-            <button className="group relative px-8 py-4 bg-glass rounded-xl font-heading font-semibold text-lg text-white transition-all duration-300 hover:neon-glow-purple border border-purple-500/30 hover:border-purple-400/60 hover:bg-purple-900/30">
+            <button
+              type="button"
+              onClick={onShuffleClick}
+              className="group relative px-8 py-4 bg-glass rounded-xl font-heading font-semibold text-lg text-white transition-all duration-300 hover:neon-glow-purple border border-purple-500/30 hover:border-purple-400/60 hover:bg-purple-900/30"
+            >
               <span className="relative z-10">Start Shuffling →</span>
               <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600/0 to-cyan-600/0 group-hover:from-purple-600/20 group-hover:to-cyan-600/20 transition-all duration-300" />
             </button>

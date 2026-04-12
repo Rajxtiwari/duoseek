@@ -20,6 +20,38 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [Inter](https://fonts.google.com/specimen/Inter) for body text and [Rajdhani](https://fonts.google.com/specimen/Rajdhani) for headings, loaded via Google Fonts in `globals.css`.
 
+## Supabase Auth Setup
+
+This app supports:
+
+- Authentication overlay (no dedicated login page UX)
+- Email/password login and signup
+- Google OAuth login
+- Discord OAuth login
+- Ghost-mode public routes (`/`, `/lobby`, `/shuffle`, `/how-it-works`)
+- Protected profile settings route (`/profile/settings`) with auth overlay redirect
+
+Create a `.env.local` file in the project root with:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+In Supabase dashboard:
+
+1. Enable Email provider in Authentication > Providers and use Email/Password.
+2. Disable magic link if you only want standard email/password.
+3. Enable Google provider.
+4. Enable Discord provider and add your Discord client ID/secret.
+5. Create a private bucket named `secure_vault_ids` for government ID uploads.
+6. Add storage policies so only authenticated users can upload/read their own files.
+7. Set your redirect URL to:
+
+```text
+http://localhost:3000/auth/callback
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

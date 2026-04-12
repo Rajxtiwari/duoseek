@@ -11,6 +11,18 @@
   body {
     @apply bg-zinc-950 text-white;
   }
+
+  button {
+    transition: transform 150ms ease, box-shadow 220ms ease;
+  }
+
+  button:active {
+    transform: scale(0.98);
+  }
+
+  button:hover {
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.18);
+  }
 }
 
 @layer utilities {

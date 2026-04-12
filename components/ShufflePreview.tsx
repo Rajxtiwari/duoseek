@@ -3,19 +3,25 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shuffle } from "lucide-react";
+import { useAuthOverlay } from "@/components/auth/AuthProvider";
 import GlassContainer from "./GlassContainer";
 import GamerCard from "./GamerCard";
 
 export default function ShufflePreview() {
   const [phase, setPhase] = useState<"idle" | "shuffling" | "matched">("idle");
+  const { requireAuth } = useAuthOverlay();
 
-  const handleShuffle = () => {
+  const runShuffle = () => {
     if (phase !== "idle") {
       setPhase("idle");
       return;
     }
     setPhase("shuffling");
     setTimeout(() => setPhase("matched"), 1500);
+  };
+
+  const handleShuffle = () => {
+    requireAuth("shuffle", runShuffle);
   };
 
   return (
@@ -43,7 +49,7 @@ export default function ShufflePreview() {
         <div className="flex flex-col items-center gap-10">
           <motion.button
             onClick={handleShuffle}
-            whileTap={{ scale: 0.95 }}
+            whileTap={{ scale: 0.98 }}
             className={`relative group px-12 py-5 rounded-2xl font-heading font-bold text-2xl tracking-wider text-white transition-all duration-300 ${
               phase === "matched"
                 ? "bg-green-500/20 border border-green-500/40"

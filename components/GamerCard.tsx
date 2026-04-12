@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import GlassContainer from "./GlassContainer";
 import { Shield, Star } from "lucide-react";
+import { useAuthOverlay } from "@/components/auth/AuthProvider";
 
 interface GamerCardProps {
   username?: string;
@@ -19,6 +20,7 @@ export default function GamerCard({
   winRate = "67%",
 }: GamerCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const { requireAuth } = useAuthOverlay();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
@@ -90,9 +92,24 @@ export default function GamerCard({
           <span className="text-xs text-zinc-400">Verified Riot ID</span>
         </div>
 
-        <button className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-600 font-heading font-semibold text-sm text-white hover:opacity-90 transition-opacity">
-          Send Invite
-        </button>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.98 }}
+            onClick={() => requireAuth("connect")}
+            className="py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-600 font-heading font-semibold text-sm text-white transition-all hover:shadow-[0_0_18px_rgba(168,85,247,0.45)]"
+          >
+            Connect
+          </motion.button>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.98 }}
+            onClick={() => requireAuth("chat")}
+            className="py-2.5 rounded-xl border border-white/20 bg-zinc-900/60 font-heading font-semibold text-sm text-white transition-all hover:shadow-[0_0_18px_rgba(34,211,238,0.35)]"
+          >
+            Chat
+          </motion.button>
+        </div>
       </GlassContainer>
     </motion.div>
   );
