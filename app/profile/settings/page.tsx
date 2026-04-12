@@ -2,9 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
+import GamerAvatar from "@/components/GamerAvatar";
 
 type Step = 1 | 2 | 3;
 
@@ -25,7 +25,7 @@ function ageFromDate(date: string) {
 }
 
 export default function ProfileSettingsPage() {
-  const { user, openAuthOverlay } = useAuthOverlay();
+  const { user, profile, openAuthOverlay, refreshProfile } = useAuthOverlay();
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -37,15 +37,18 @@ export default function ProfileSettingsPage() {
   const [activeHours, setActiveHours] = useState("");
   const [riotId, setRiotId] = useState("");
   const [steamUrl, setSteamUrl] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [idFile, setIdFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
   const age = ageFromDate(birthDate);
-  const avatar = useMemo(() => {
-    const metadata = user?.user_metadata as { avatar_url?: string; picture?: string } | undefined;
-    return metadata?.avatar_url || metadata?.picture || null;
-  }, [user]);
+  const metadata = user?.user_metadata as { full_name?: string } | undefined;
+  const providers = (user?.app_metadata?.providers as string[] | undefined) ?? [];
+  const hasDiscord = providers.includes("discord");
+  const avatar = useMemo(() => profile?.avatar_url || null, [profile?.avatar_url]);
+  const gamerHandle = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user?.email?.split("@")[0] || "player"}`;
 
   const progress = step === 1 ? 34 : step === 2 ? 67 : 100;
 
@@ -153,7 +156,51 @@ export default function ProfileSettingsPage() {
     setUploading(false);
     setMessage("ID uploaded to secure vault. Verification submitted.");
   };
+  
+  const uploadPublicAvatar = async () => {
+    if (!user) {
+      openAuthOverlay("generic", "/profile/settings");
+      return;
+    }
+    if (!avatarFile) {
+      setMessage("Choose an avatar image first.");
+      return;
+    }
 
+    setAvatarUploading(true);
+    setMessage("");
+    const supabase = createClient();
+    const safeName = avatarFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `${user.id}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase
+      .storage
+      .from("public_avatars")
+      .upload(storagePath, avatarFile, { cacheControl: "3600", upsert: true });
+
+    if (uploadError) {
+      setMessage(uploadError.message);
+      setAvatarUploading(false);
+      return;
+    }
+
+    const { data: publicData } = supabase.storage.from("public_avatars").getPublicUrl(storagePath);
+    const avatarUrl = publicData.publicUrl;
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({ id: user.id, gamer_handle: profile?.gamer_handle ?? user.email?.split("@")[0] ?? "player", avatar_url: avatarUrl }, { onConflict: "id" });
+
+    if (profileError) {
+      setMessage(profileError.message);
+      setAvatarUploading(false);
+      return;
+    }
+
+    await refreshProfile();
+    setAvatarUploading(false);
+    setMessage("Avatar updated.");
+  };
   if (!user) {
     return (
       <main className="min-h-screen pt-28 pb-16 px-6 md:px-12 flex items-center justify-center">
@@ -182,14 +229,16 @@ export default function ProfileSettingsPage() {
             <h1 className="font-heading text-4xl text-white font-bold mt-2">Profile Settings</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 rounded-full overflow-hidden border border-white/15 bg-zinc-900/70">
-              {avatar ? (
-                <Image src={avatar} alt="Discord avatar" fill className="object-cover" />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-white font-bold">{(user.email || "U").charAt(0).toUpperCase()}</div>
-              )}
+            <GamerAvatar
+              avatarUrl={avatar}
+              seedText={profile?.gamer_handle || metadata?.full_name || user.email || "U"}
+              alt="Profile avatar"
+              sizeClassName="h-12 w-12"
+            />
+            <div>
+              <p className="text-sm text-zinc-200 font-medium">{gamerHandle}</p>
+              <p className="text-xs text-zinc-400">{hasDiscord ? "Discord connected" : "Connect Discord to unlock matchmaking benefits"}</p>
             </div>
-            <p className="text-sm text-zinc-300">{user.email}</p>
           </div>
         </div>
 
@@ -221,6 +270,26 @@ export default function ProfileSettingsPage() {
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="level-1" initial={{ x: 26, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -26, opacity: 0 }} transition={spring} className="mt-8 grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2 rounded-xl border border-white/10 bg-zinc-900/40 p-4">
+                <p className="text-sm text-zinc-300 mb-3">Gamer Badge (Public Avatar)</p>
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
+                    className="text-sm text-zinc-300"
+                  />
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={() => void uploadPublicAvatar()}
+                    disabled={avatarUploading}
+                    className="rounded-lg border border-cyan-400/45 bg-cyan-900/30 px-4 py-2 text-white hover:shadow-[0_0_18px_rgba(34,211,238,0.35)] transition-shadow disabled:opacity-60"
+                  >
+                    {avatarUploading ? "Uploading..." : "Upload to public_avatars"}
+                  </motion.button>
+                </div>
+              </div>
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" className="rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white" />
               <input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className="rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white" />
               <input value={gender} onChange={(event) => setGender(event.target.value)} placeholder="Gender" className="rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white" />

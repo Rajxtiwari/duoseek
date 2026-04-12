@@ -1,15 +1,27 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthCallbackUrl } from "@/lib/auth/config";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
 
 type AuthMode = "login" | "signup";
-type OverlayStep = "auth" | "handle";
+const AUTH_DRAFT_KEY = "duoseek.auth.draft";
+
+function getPasswordScore(password: string) {
+  const hasMinLength = password.length >= 6;
+  const hasLetter = /[A-Za-z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  return Number(hasMinLength) + Number(hasLetter) + Number(hasNumber);
+}
+
+function getStrengthLabel(score: number) {
+  if (score <= 1) return "Weak";
+  if (score === 2) return "Medium";
+  return "Strong";
+}
 
 function GoogleIcon() {
   return (
@@ -31,37 +43,49 @@ function DiscordIcon() {
 }
 
 export default function AuthOverlay() {
-  const router = useRouter();
-  const { isOverlayOpen, closeAuthOverlay, nextPath, overlayIntent, setUserAfterAuth } = useAuthOverlay();
+  const { user, isOverlayOpen, closeAuthOverlay, nextPath, overlayIntent, pendingIntent, completeAuthFlow, setUserAfterAuth, showToast } = useAuthOverlay();
   const [mode, setMode] = useState<AuthMode>("login");
-  const [step, setStep] = useState<OverlayStep>("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [handle, setHandle] = useState("");
-  const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const canUseSupabase = hasSupabaseEnv();
+  const passwordScore = getPasswordScore(password);
+  const canSubmitSignup = mode === "login" || passwordScore === 3;
 
   const onOAuth = async (provider: "google" | "discord") => {
     if (!canUseSupabase) {
-      setMessage("Supabase env is missing.");
+      showToast({ title: "Auth not configured", description: "Supabase env is missing.", variant: "error" });
       return;
     }
 
     setLoading(true);
-    setMessage("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-      },
-    });
+    try {
+      const supabase = createClient();
+      const intentParam = pendingIntent ? `&intent=${pendingIntent}` : "";
+      const callbackUrl = getAuthCallbackUrl();
+      const authAction = user
+        ? supabase.auth.linkIdentity({
+            provider,
+            options: {
+              redirectTo: `${callbackUrl}?next=${encodeURIComponent(nextPath)}${intentParam}`,
+            },
+          })
+        : supabase.auth.signInWithOAuth({
+            provider,
+            options: {
+              redirectTo: `${callbackUrl}?next=${encodeURIComponent(nextPath)}${intentParam}`,
+            },
+          });
 
-    if (error) {
-      setMessage(error.message);
+      const { error } = await authAction;
+
+      if (error) {
+        showToast({ title: "OAuth failed", description: error.message, variant: "error" });
+        setLoading(false);
+      }
+    } catch {
+      showToast({ title: "OAuth interrupted", description: "Please try again.", variant: "error" });
       setLoading(false);
     }
   };
@@ -69,79 +93,100 @@ export default function AuthOverlay() {
   const onEmailPassword = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canUseSupabase) {
-      setMessage("Supabase env is missing.");
+      showToast({ title: "Auth not configured", description: "Supabase env is missing.", variant: "error" });
+      return;
+    }
+
+    if (mode === "signup" && !canSubmitSignup) {
+      showToast({
+        title: "Weak password",
+        description: "Use at least 6 characters with 1 letter and 1 number.",
+        variant: "error",
+      });
       return;
     }
 
     setLoading(true);
-    setMessage("");
     const supabase = createClient();
 
     if (mode === "login") {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setMessage(error.message);
+        showToast({ title: "Login failed", description: error.message, variant: "error" });
         setLoading(false);
         return;
       }
 
-      setUserAfterAuth(data.user ?? null);
-      closeAuthOverlay();
-      router.push(nextPath);
+      const signedInUser = data.user ?? null;
+      setUserAfterAuth(signedInUser);
+      completeAuthFlow(signedInUser);
+      showToast({ title: "Welcome back", description: "Logged in successfully.", variant: "success" });
       setLoading(false);
       return;
     }
 
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
-      setMessage(error.message);
+      showToast({ title: "Signup failed", description: error.message, variant: "error" });
       setLoading(false);
       return;
     }
 
-    if (!data.user) {
-      setMessage("Signup created, but no session yet. Check your auth settings.");
+    if (!data.user || !data.session) {
+      showToast({ title: "Verify your identity", description: "Check your inbox and verify your email.", variant: "info" });
       setLoading(false);
       return;
     }
 
-    setPendingUser(data.user);
-    setStep("handle");
+    setUserAfterAuth(data.user);
+    completeAuthFlow(data.user);
+    showToast({ title: "Account ready", description: "Signup complete.", variant: "success" });
     setLoading(false);
   };
 
-  const finishHandle = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!pendingUser) {
-      setMessage("No active signup session.");
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AUTH_DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { mode?: AuthMode; email?: string };
+      queueMicrotask(() => {
+        if (draft.mode === "login" || draft.mode === "signup") {
+          setMode(draft.mode);
+        }
+        if (draft.email) {
+          setEmail(draft.email);
+        }
+      });
+    } catch {
+      // Ignore malformed draft.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTH_DRAFT_KEY, JSON.stringify({ mode, email }));
+    } catch {
+      // Ignore storage write issues.
+    }
+  }, [email, mode]);
+
+  useEffect(() => {
+    if (!isOverlayOpen) {
       return;
     }
 
-    const cleanHandle = handle.trim();
-    if (cleanHandle.length < 3) {
-      setMessage("Handle must be at least 3 characters.");
-      return;
-    }
-
-    setLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.updateUser({
-      data: {
-        gamer_handle: cleanHandle,
-      },
+    queueMicrotask(() => {
+      setPassword("");
     });
+  }, [isOverlayOpen]);
 
-    if (error) {
-      setMessage(error.message);
-      setLoading(false);
+  useEffect(() => {
+    if (!isOverlayOpen || !user) {
       return;
     }
 
-    setUserAfterAuth(data.user ?? pendingUser);
-    closeAuthOverlay();
-    router.push(nextPath);
-    setLoading(false);
-  };
+    completeAuthFlow(user);
+  }, [completeAuthFlow, isOverlayOpen, user]);
 
   const panelTransition = useMemo(
     () => ({ type: "spring" as const, stiffness: 260, damping: 20 }),
@@ -163,7 +208,7 @@ export default function AuthOverlay() {
     <AnimatePresence>
       {isOverlayOpen && (
         <motion.div
-          className="fixed inset-0 z-[80] backdrop-blur-md bg-black/45 flex items-center justify-end p-4 md:p-8"
+          className="fixed inset-0 z-[80] backdrop-blur-md bg-black/45 flex items-center justify-center p-4 md:p-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -171,9 +216,9 @@ export default function AuthOverlay() {
         >
           <motion.div
             className="w-full max-w-md rounded-3xl border border-purple-400/30 bg-glass p-6 md:p-8 shadow-[0_0_45px_rgba(168,85,247,0.25)]"
-            initial={{ x: 120, opacity: 0.4 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 120, opacity: 0 }}
+            initial={{ y: 44, opacity: 0.5 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 44, opacity: 0 }}
             transition={panelTransition}
             onClick={(event) => event.stopPropagation()}
           >
@@ -182,112 +227,97 @@ export default function AuthOverlay() {
               <h2 className="font-heading text-3xl text-white font-bold mt-2">{intentCopy}</h2>
             </div>
 
-            <AnimatePresence mode="wait">
-              {step === "auth" ? (
-                <motion.div
-                  key="auth-step"
-                  initial={{ x: 24, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -24, opacity: 0 }}
-                  transition={panelTransition}
-                  className="space-y-4"
-                >
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => void onOAuth("google")}
-                    disabled={loading}
-                    className="w-full rounded-xl border border-white/20 px-4 py-3 text-white flex items-center justify-center gap-2 hover:shadow-[0_0_22px_rgba(45,212,191,0.25)] transition-shadow"
-                  >
-                    <GoogleIcon />
-                    Continue with Google
-                  </motion.button>
+            <motion.div
+              initial={{ x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -24, opacity: 0 }}
+              transition={panelTransition}
+              className="space-y-4"
+            >
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => void onOAuth("google")}
+                disabled={loading}
+                className="w-full rounded-xl border border-white/20 px-4 py-3 text-white flex items-center justify-center gap-2 hover:shadow-[0_0_22px_rgba(45,212,191,0.25)] transition-shadow"
+              >
+                <GoogleIcon />
+                Continue with Google
+              </motion.button>
 
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => void onOAuth("discord")}
-                    disabled={loading}
-                    className="w-full rounded-xl border border-purple-400/50 bg-purple-900/30 px-4 py-3 text-white flex items-center justify-center gap-2 hover:shadow-[0_0_22px_rgba(168,85,247,0.35)] transition-shadow"
-                  >
-                    <DiscordIcon />
-                    Continue with Discord
-                  </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => void onOAuth("discord")}
+                disabled={loading}
+                className="w-full rounded-xl border border-purple-400/50 bg-purple-900/30 px-4 py-3 text-white flex items-center justify-center gap-2 hover:shadow-[0_0_22px_rgba(168,85,247,0.35)] transition-shadow"
+              >
+                <DiscordIcon />
+                Continue with Discord
+              </motion.button>
 
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
-                    <div className="h-px bg-white/10 flex-1" />
-                    <span>Email + Password</span>
-                    <div className="h-px bg-white/10 flex-1" />
-                  </div>
-
-                  <form onSubmit={onEmailPassword} className="space-y-3">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="you@example.com"
-                      required
-                      className="w-full rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white"
-                    />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Password"
-                      minLength={6}
-                      required
-                      className="w-full rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white"
-                    />
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      type="submit"
-                      disabled={loading}
-                      className="w-full rounded-xl border border-cyan-400/40 bg-cyan-900/30 px-4 py-3 text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-shadow"
-                    >
-                      {loading ? "Working..." : mode === "login" ? "Login" : "Create Account"}
-                    </motion.button>
-                  </form>
-
-                  <button
-                    onClick={() => setMode((current) => (current === "login" ? "signup" : "login"))}
-                    className="text-sm text-zinc-300 hover:text-white"
-                  >
-                    {mode === "login" ? "Need an account? Switch to Signup" : "Have an account? Switch to Login"}
-                  </button>
-                </motion.div>
-              ) : (
-                <motion.form
-                  key="handle-step"
-                  initial={{ x: 24, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -24, opacity: 0 }}
-                  transition={panelTransition}
-                  className="space-y-4"
-                  onSubmit={finishHandle}
-                >
-                  <h3 className="font-heading text-2xl text-white font-bold">Choose your Gamer Handle</h3>
-                  <p className="text-zinc-400 text-sm">This is how players will find you in queue and lobby previews.</p>
-                  <input
-                    type="text"
-                    value={handle}
-                    onChange={(event) => setHandle(event.target.value)}
-                    placeholder="NightClutch_007"
-                    minLength={3}
-                    maxLength={24}
-                    required
-                    className="w-full rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white"
-                  />
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    type="submit"
-                    disabled={loading}
-                    className="w-full rounded-xl border border-purple-400/40 bg-purple-900/30 px-4 py-3 text-white hover:shadow-[0_0_22px_rgba(168,85,247,0.35)] transition-shadow"
-                  >
-                    {loading ? "Saving..." : "Complete Profile"}
-                  </motion.button>
-                </motion.form>
+              {!user && (
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Using different emails for Google and Discord? Sign in with your existing DuoSeek account first, then use the top-right Connect buttons to link providers.
+                </p>
               )}
-            </AnimatePresence>
 
-            {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
+              <div className="flex items-center gap-3 text-xs text-zinc-500">
+                <div className="h-px bg-white/10 flex-1" />
+                <span>Email + Password</span>
+                <div className="h-px bg-white/10 flex-1" />
+              </div>
+
+              <form onSubmit={onEmailPassword} className="space-y-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white"
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  minLength={6}
+                  required
+                  className="w-full rounded-xl border border-white/15 bg-zinc-900/70 px-4 py-3 text-white"
+                />
+                {mode === "signup" && (
+                  <div className="space-y-2">
+                    <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          passwordScore === 3 ? "bg-emerald-400" : passwordScore === 2 ? "bg-amber-400" : "bg-rose-400"
+                        }`}
+                        style={{ width: `${(passwordScore / 3) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Password strength: {getStrengthLabel(passwordScore)}. Use 6+ chars, 1 letter, 1 number.
+                    </p>
+                  </div>
+                )}
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  disabled={loading || !canSubmitSignup}
+                  className="w-full rounded-xl border border-cyan-400/40 bg-cyan-900/30 px-4 py-3 text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-shadow"
+                >
+                  {loading ? "Securing access..." : mode === "login" ? "Login" : "Create Account"}
+                </motion.button>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => setMode((current) => (current === "login" ? "signup" : "login"))}
+                className="text-sm text-zinc-300 hover:text-white"
+              >
+                {mode === "login" ? "Need an account? Switch to Signup" : "Have an account? Switch to Login"}
+              </button>
+            </motion.div>
+
             {!canUseSupabase && <p className="mt-4 text-sm text-amber-300">Set Supabase env vars to enable auth.</p>}
           </motion.div>
         </motion.div>

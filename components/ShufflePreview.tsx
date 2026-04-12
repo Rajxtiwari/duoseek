@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import { Shuffle } from "lucide-react";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
 import GlassContainer from "./GlassContainer";
@@ -9,20 +10,43 @@ import GamerCard from "./GamerCard";
 
 export default function ShufflePreview() {
   const [phase, setPhase] = useState<"idle" | "shuffling" | "matched">("idle");
+  const searchParams = useSearchParams();
   const { requireAuth } = useAuthOverlay();
 
-  const runShuffle = () => {
+  const runShuffle = useCallback(() => {
     if (phase !== "idle") {
       setPhase("idle");
       return;
     }
     setPhase("shuffling");
     setTimeout(() => setPhase("matched"), 1500);
-  };
+  }, [phase]);
 
   const handleShuffle = () => {
     requireAuth("shuffle", runShuffle);
   };
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<{ intent?: string }>;
+      if (customEvent.detail?.intent === "shuffle") {
+        runShuffle();
+      }
+    };
+
+    window.addEventListener("duoseek:resume-intent", listener);
+    return () => {
+      window.removeEventListener("duoseek:resume-intent", listener);
+    };
+  }, [runShuffle]);
+
+  useEffect(() => {
+    if (searchParams.get("autostart") === "1") {
+      queueMicrotask(() => {
+        runShuffle();
+      });
+    }
+  }, [runShuffle, searchParams]);
 
   return (
     <section className="py-24 px-6 md:px-12 relative overflow-hidden">
