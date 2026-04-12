@@ -14,21 +14,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
+import type { DuoSeekProfile } from "@/lib/profile";
 import AuthOverlay from "@/components/auth/AuthOverlay";
 import UsernameInterceptor from "@/components/auth/UsernameInterceptor";
 import ToastHub, { type ToastItem } from "@/components/auth/ToastHub";
 
 type AuthOverlayIntent = "shuffle" | "connect" | "chat" | "post" | "generic";
 
-type GamerProfile = {
-  id: string;
-  gamer_handle: string | null;
-  avatar_url: string | null;
-};
-
 type AuthContextValue = {
   user: User | null;
-  profile: GamerProfile | null;
+  profile: DuoSeekProfile | null;
+  profileChecked: boolean;
   loading: boolean;
   isOverlayOpen: boolean;
   overlayIntent: AuthOverlayIntent;
@@ -51,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<GamerProfile | null>(null);
+  const [profile, setProfile] = useState<DuoSeekProfile | null>(null);
   const [profileChecked, setProfileChecked] = useState(false);
   const [loading, setLoading] = useState(hasSupabaseEnv());
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
@@ -90,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,gamer_handle,avatar_url")
+      .select("id,gamer_handle,avatar_url,full_name,age,gender,dob,phone_number,bio,verification_level,is_verified")
       .eq("id", targetUser.id)
       .maybeSingle();
 
@@ -110,11 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .update({ avatar_url: providerAvatarUrl })
         .eq("id", targetUser.id)
-        .select("id,gamer_handle,avatar_url")
+        .select("id,gamer_handle,avatar_url,full_name,age,gender,dob,phone_number,bio,verification_level,is_verified")
         .maybeSingle();
 
       if (requestId === profileRequestSeq.current) {
-        setProfile((updatedData as GamerProfile | null) ?? (data as GamerProfile));
+        setProfile((updatedData as DuoSeekProfile | null) ?? (data as DuoSeekProfile));
         setProfileChecked(true);
         setNeedsAccountLinkHelp(false);
         try {
@@ -127,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (requestId === profileRequestSeq.current) {
-      const resolvedProfile = (data as GamerProfile | null) ?? null;
+      const resolvedProfile = (data as DuoSeekProfile | null) ?? null;
       setProfile(resolvedProfile);
       setProfileChecked(true);
 
@@ -312,6 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       profile,
+      profileChecked,
       loading,
       isOverlayOpen,
       overlayIntent,
@@ -326,7 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       showToast,
     }),
-    [closeAuthOverlay, completeAuthFlow, isOverlayOpen, loading, nextPath, openAuthOverlay, overlayIntent, pendingIntent, profile, refreshProfile, requireAuth, showToast, signOut, user],
+    [closeAuthOverlay, completeAuthFlow, isOverlayOpen, loading, nextPath, openAuthOverlay, overlayIntent, pendingIntent, profile, profileChecked, refreshProfile, requireAuth, showToast, signOut, user],
   );
 
   const shouldInterceptHandle = Boolean(user && profileChecked && !profile?.gamer_handle && !needsAccountLinkHelp);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { getAuthCallbackUrl } from "@/lib/auth/config";
+import { isLevelOneComplete } from "@/lib/profile";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
@@ -67,6 +68,7 @@ export default function AuthNav() {
   const providers = (user.app_metadata?.providers as string[] | undefined) ?? [];
   const hasDiscord = providers.includes("discord");
   const hasGoogle = providers.includes("google");
+  const levelOneComplete = isLevelOneComplete(profile);
   const handleText = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user.email?.split("@")[0] || "player"}`;
   const avatarUrl = profile?.avatar_url || null;
   const initials = (profile?.gamer_handle || metadata?.full_name || "P").slice(0, 1).toUpperCase();
@@ -91,8 +93,19 @@ export default function AuthNav() {
           Connect Discord to unlock benefits
         </button>
       )}
-      <GamerAvatar avatarUrl={avatarUrl} seedText={initials} alt="User avatar" sizeClassName="h-9 w-9" />
-      <span className="hidden md:inline text-zinc-300 text-sm max-w-40 truncate">{handleText}</span>
+      {levelOneComplete ? (
+        <>
+          <GamerAvatar avatarUrl={avatarUrl} seedText={initials} alt="User avatar" sizeClassName="h-9 w-9" />
+          <span className="hidden md:inline text-zinc-300 text-sm max-w-40 truncate">{handleText}</span>
+        </>
+      ) : (
+        <Link
+          href="/profile/settings?required=1"
+          className="hidden md:inline px-3 py-1.5 rounded-lg border border-cyan-400/40 bg-cyan-900/20 text-cyan-200 text-xs"
+        >
+          Complete Level 1
+        </Link>
+      )}
       <button
         type="button"
         onClick={() => void signOut()}

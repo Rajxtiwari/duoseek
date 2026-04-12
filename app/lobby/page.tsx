@@ -1,7 +1,34 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import GamerCard from "@/components/GamerCard";
 import LobbyReels from "@/components/LobbyReels";
+import { useAuthOverlay } from "@/components/auth/AuthProvider";
+import { isLevelOneComplete } from "@/lib/profile";
 
 export default function LobbyPage() {
+  const router = useRouter();
+  const { user, profile, profileChecked, loading } = useAuthOverlay();
+  const mustCompleteLevelOne = Boolean(user && profileChecked && !isLevelOneComplete(profile));
+
+  useEffect(() => {
+    if (!mustCompleteLevelOne) {
+      return;
+    }
+    router.replace("/profile/settings?required=1");
+  }, [mustCompleteLevelOne, router]);
+
+  if (user && (loading || !profileChecked || mustCompleteLevelOne)) {
+    return (
+      <main className="min-h-screen pt-28 pb-16 px-6 md:px-12 flex items-center justify-center">
+        <div className="rounded-2xl border border-cyan-400/30 bg-glass p-6 text-cyan-200 text-sm">
+          Redirecting to Level 1 profile setup...
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen pt-28 pb-16 px-6 md:px-12">
       <section className="max-w-7xl mx-auto">

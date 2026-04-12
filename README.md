@@ -31,6 +31,28 @@ This app supports:
 - Ghost-mode public routes (`/`, `/lobby`, `/shuffle`, `/how-it-works`)
 - Protected profile settings route (`/profile/settings`) with auth overlay redirect
 - Global `Username Interceptor` modal when no `gamer_handle` exists in `public.profiles`
+- 3-tier Profile & Verification flow with Midnight Glass UI
+- Level 1 required for signed-in users before entering `/lobby`
+
+### 3-Tier Profile System
+
+1. Level 1: Basic Identity
+- Full Name, Age, Gender, Date of Birth, Bio, Optional Phone Number
+- Saves to `public.profiles`
+- Unlocks Level 2 when complete
+
+2. Level 2: Document Verification
+- Manual document type picker: Aadhaar, PAN, College ID, Bank Card
+- Uploads front/back images to private bucket `secure_vault_ids`:
+	- `${user.id}/docs/${type}_front.png`
+	- `${user.id}/docs/${type}_back.png`
+- Shows "Document Sent for Review" with cyan neon state
+
+3. Level 3: Elite Status
+- Locked frosted card with coming soon copy
+
+Navbar behavior:
+- Shows `@gamer_handle` and avatar once Level 1 is complete.
 
 Avatar priority in UI:
 
