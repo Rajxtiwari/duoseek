@@ -10,17 +10,24 @@ export async function GET(request: Request) {
 
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/";
+  const intent = requestUrl.searchParams.get("intent");
+
+  const resumeUrl = new URL(next, requestUrl.origin);
+  resumeUrl.searchParams.set("auth", "1");
+  if (intent) {
+    resumeUrl.searchParams.set("intent", intent);
+  }
 
   if (!code) {
-    return NextResponse.redirect(new URL(`/?auth=1&next=${encodeURIComponent(next)}`, requestUrl.origin));
+    return NextResponse.redirect(new URL(`/?auth=1&next=${encodeURIComponent(next)}${intent ? `&intent=${encodeURIComponent(intent)}` : ""}`, requestUrl.origin));
   }
 
   const supabase = await createClient();
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(new URL(`/?auth=1&next=${encodeURIComponent(next)}`, requestUrl.origin));
+    return NextResponse.redirect(new URL(`/?auth=1&next=${encodeURIComponent(next)}${intent ? `&intent=${encodeURIComponent(intent)}` : ""}`, requestUrl.origin));
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+  return NextResponse.redirect(resumeUrl);
 }

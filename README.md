@@ -30,6 +30,29 @@ This app supports:
 - Discord OAuth login
 - Ghost-mode public routes (`/`, `/lobby`, `/shuffle`, `/how-it-works`)
 - Protected profile settings route (`/profile/settings`) with auth overlay redirect
+- Global `Username Interceptor` modal when no `gamer_handle` exists in `public.profiles`
+
+Avatar priority in UI:
+
+1. `public.profiles.avatar_url` (Discord CDN URL or public_avatars URL)
+3. Initials gradient fallback
+
+### Required Supabase SQL
+
+Run `supabase/local-setup.sql` in Supabase SQL editor so gamer handles and secure-vault policies are enforced.
+
+Privacy policy expression enforced for uploads/select/update/delete in `secure_vault_ids`:
+
+```sql
+(auth.role() = 'authenticated')
+AND (bucket_id = 'secure_vault_ids')
+AND (name ~ (auth.uid()::text || '/.*'))
+```
+
+Create an additional public bucket named `public_avatars` for gamer profile pictures.
+
+- Store direct public URLs in `public.profiles.avatar_url`.
+- Keep `secure_vault_ids` only for Level 3 verification documents.
 
 Create a `.env.local` file in the project root with:
 
@@ -51,6 +74,26 @@ In Supabase dashboard:
 ```text
 http://localhost:3000/auth/callback
 ```
+
+### Local checklist
+
+1. Add env vars in `.env.local`.
+	- Optional: `NEXT_PUBLIC_AUTH_CALLBACK_URL=http://localhost:3000/auth/callback`
+2. In Auth > URL Configuration add site URL `http://localhost:3000`.
+3. Add redirect URL `http://localhost:3000/auth/callback`.
+4. Keep email confirmations enabled for Email/Password signup verification.
+5. Create public storage bucket `public_avatars` for profile photos.
+6. Keep private storage bucket `secure_vault_ids` for verification docs only.
+
+### Provider Linking (Different Emails)
+
+If a user has different emails on Google and Discord, they must link identities inside an existing DuoSeek session:
+
+1. Sign in with the original DuoSeek account (email/password or already-linked provider).
+2. Click `Connect Google` or `Connect Discord` in the top-right auth nav.
+3. Complete OAuth consent; DuoSeek uses Supabase identity linking for the current user.
+
+Do not start by signing in with a second provider while logged out, or Supabase can create a separate auth user and trigger a new username claim.
 
 ## Learn More
 
