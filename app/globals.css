@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --font-heading: "Rajdhani", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-white;
+  }
+}
+
+@layer utilities {
+  .bg-glass {
+    backdrop-filter: blur(16px);
+    background: rgba(17, 17, 17, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .bg-glass-dark {
+    backdrop-filter: blur(24px);
+    background: rgba(10, 10, 10, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .neon-glow-purple {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.5), 0 0 40px rgba(168, 85, 247, 0.25);
+  }
+  .neon-glow-cyan {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.5), 0 0 40px rgba(34, 211, 238, 0.25);
+  }
+  .border-glow-purple {
+    border: 1px solid rgba(168, 85, 247, 0.5);
+  }
+  .border-glow-cyan {
+    border: 1px solid rgba(34, 211, 238, 0.5);
+  }
+  .divider-purple {
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.6), transparent);
+    height: 1px;
+    width: 100%;
+  }
+}
