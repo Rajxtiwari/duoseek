@@ -31,17 +31,6 @@ function GoogleIcon() {
   );
 }
 
-function DiscordIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-      <path
-        fill="currentColor"
-        d="M20.3 4.4A16.9 16.9 0 0 0 16 3a11.8 11.8 0 0 0-.5 1.1 15.5 15.5 0 0 0-7 0L8 3a16.9 16.9 0 0 0-4.3 1.4C1 8.3.4 12 .7 15.8a16.8 16.8 0 0 0 5.2 2.6c.4-.5.8-1.1 1.1-1.7-.6-.2-1.2-.5-1.7-.8l.4-.3a12.4 12.4 0 0 0 10.6 0l.4.3c-.5.3-1.1.6-1.7.8.3.6.7 1.2 1.1 1.7a16.8 16.8 0 0 0 5.2-2.6c.4-4.5-.7-8.2-2.9-11.4ZM9.4 13.8c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm5.2 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"
-      />
-    </svg>
-  );
-}
-
 export default function AuthOverlay() {
   const { user, isOverlayOpen, closeAuthOverlay, nextPath, overlayIntent, pendingIntent, completeAuthFlow, setUserAfterAuth, showToast } = useAuthOverlay();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -53,7 +42,7 @@ export default function AuthOverlay() {
   const passwordScore = getPasswordScore(password);
   const canSubmitSignup = mode === "login" || passwordScore === 3;
 
-  const onOAuth = async (provider: "google" | "discord") => {
+  const onOAuth = async (provider: "google") => {
     if (!canUseSupabase) {
       showToast({ title: "Auth not configured", description: "Supabase env is missing.", variant: "error" });
       return;
@@ -244,19 +233,9 @@ export default function AuthOverlay() {
                 Continue with Google
               </motion.button>
 
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                onClick={() => void onOAuth("discord")}
-                disabled={loading}
-                className="w-full rounded-xl border border-purple-400/50 bg-purple-900/30 px-4 py-3 text-white flex items-center justify-center gap-2 hover:shadow-[0_0_22px_rgba(168,85,247,0.35)] transition-shadow"
-              >
-                <DiscordIcon />
-                Continue with Discord
-              </motion.button>
-
               {!user && (
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Using different emails for Google and Discord? Sign in with your existing DuoSeek account first, then use the top-right Connect buttons to link providers.
+                  Discord sign-in is intentionally disabled to avoid duplicate accounts. Sign in with Google or Email, then use Connect Discord in settings.
                 </p>
               )}
 
