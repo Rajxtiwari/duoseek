@@ -14,6 +14,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { getSafeInternalPath } from "@/lib/navigation";
 import AuthOverlay from "@/components/auth/AuthOverlay";
 import UsernameInterceptor from "@/components/auth/UsernameInterceptor";
 import ToastHub, { type ToastItem } from "@/components/auth/ToastHub";
@@ -190,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (intent: AuthOverlayIntent = "generic", requestedPath?: string) => {
       setOverlayIntent(intent);
       setPendingIntent(intent);
-      setNextPath(requestedPath ?? pathname ?? "/");
+      setNextPath(getSafeInternalPath(requestedPath ?? pathname ?? "/"));
       setIsOverlayOpen(true);
     },
     [pathname],
@@ -219,8 +220,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (nextPath && nextPath !== pathname) {
-        router.push(nextPath);
+      const safeNextPath = getSafeInternalPath(nextPath, pathname ?? "/");
+      if (safeNextPath && safeNextPath !== pathname) {
+        router.push(safeNextPath);
       }
     },
     [nextPath, pathname, pendingIntent, router],
@@ -292,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestedIntent === "shuffle" || requestedIntent === "connect" || requestedIntent === "chat" || requestedIntent === "post"
         ? requestedIntent
         : "generic";
-    const safeNext = requestedNext && requestedNext.startsWith("/") ? requestedNext : pathname ?? "/";
+    const safeNext = getSafeInternalPath(requestedNext, pathname ?? "/");
     queueMicrotask(() => {
       setOverlayIntent(safeIntent);
       setPendingIntent(safeIntent);

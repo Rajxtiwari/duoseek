@@ -121,6 +121,18 @@ export default function AuthOverlay() {
       return;
     }
 
+    const identities = data.user?.identities ?? [];
+    if (identities.length === 0) {
+      showToast({
+        title: "Account already exists",
+        description: "This email is already registered. Switch to Login, or use Forgot Password if needed.",
+        variant: "info",
+      });
+      setMode("login");
+      setLoading(false);
+      return;
+    }
+
     if (!data.user || !data.session) {
       showToast({ title: "Verify your identity", description: "Check your inbox and verify your email.", variant: "info" });
       setLoading(false);

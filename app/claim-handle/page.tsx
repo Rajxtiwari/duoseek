@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getSafeInternalPath } from "@/lib/navigation";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
 
 type HandleStatus = "idle" | "checking" | "available" | "taken";
@@ -17,7 +18,7 @@ export default function ClaimHandlePage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const nextPath = searchParams.get("next")?.startsWith("/") ? (searchParams.get("next") as string) : "/";
+  const nextPath = getSafeInternalPath(searchParams.get("next"));
 
   useEffect(() => {
     if (!user) {

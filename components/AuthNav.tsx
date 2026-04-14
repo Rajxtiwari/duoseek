@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { getAuthCallbackUrl } from "@/lib/auth/config";
-import { getDiscordLinkErrorMessage } from "@/lib/auth/identity";
+import { getDiscordLinkErrorMessage, isManualLinkingDisabledError } from "@/lib/auth/identity";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
@@ -43,7 +43,12 @@ export default function AuthNav() {
 
       const { error } = await authAction;
       if (error) {
-        showToast({ title: "Discord connect failed", description: getDiscordLinkErrorMessage(error.message), variant: "error" });
+        const manualLinkingDisabled = isManualLinkingDisabledError(error.message);
+        showToast({
+          title: manualLinkingDisabled ? "Discord linking unavailable" : "Discord connect failed",
+          description: getDiscordLinkErrorMessage(error.message),
+          variant: "error",
+        });
         return;
       }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { getSafeInternalPath } from "@/lib/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
   }
 
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
+  const next = getSafeInternalPath(requestUrl.searchParams.get("next"));
   const intent = requestUrl.searchParams.get("intent");
 
   const resumeUrl = new URL(next, requestUrl.origin);
