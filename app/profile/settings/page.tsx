@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAuthCallbackUrl } from "@/lib/auth/config";
-import { getDiscordLinkErrorMessage, isManualLinkingDisabledError } from "@/lib/auth/identity";
+import { getDiscordLinkErrorMessage, hasLinkedIdentity, isManualLinkingDisabledError } from "@/lib/auth/identity";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
 import GamerAvatar from "@/components/GamerAvatar";
 
@@ -47,9 +47,8 @@ export default function ProfileSettingsPage() {
 
   const age = ageFromDate(birthDate);
   const metadata = user?.user_metadata as { full_name?: string } | undefined;
-  const providers = (user?.app_metadata?.providers as string[] | undefined) ?? [];
-  const hasGoogle = providers.includes("google");
-  const hasDiscord = providers.includes("discord");
+  const hasGoogle = hasLinkedIdentity(user, "google");
+  const hasDiscord = hasLinkedIdentity(user, "discord");
   const avatar = useMemo(() => profile?.avatar_url || null, [profile?.avatar_url]);
   const gamerHandle = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user?.email?.split("@")[0] || "player"}`;
 

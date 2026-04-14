@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { getAuthCallbackUrl } from "@/lib/auth/config";
-import { getDiscordLinkErrorMessage, isManualLinkingDisabledError } from "@/lib/auth/identity";
+import { getDiscordLinkErrorMessage, hasLinkedIdentity, isManualLinkingDisabledError } from "@/lib/auth/identity";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
@@ -71,8 +71,7 @@ export default function AuthNav() {
   }
 
   const metadata = user.user_metadata as { full_name?: string } | undefined;
-  const providers = (user.app_metadata?.providers as string[] | undefined) ?? [];
-  const hasDiscord = providers.includes("discord");
+  const hasDiscord = hasLinkedIdentity(user, "discord");
   const handleText = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user.email?.split("@")[0] || "player"}`;
   const avatarUrl = profile?.avatar_url || null;
   const initials = (profile?.gamer_handle || metadata?.full_name || "P").slice(0, 1).toUpperCase();

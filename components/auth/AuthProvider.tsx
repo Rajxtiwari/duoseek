@@ -15,6 +15,7 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { getSafeInternalPath } from "@/lib/navigation";
+import { getLinkedIdentityAvatarUrl } from "@/lib/auth/identity";
 import AuthOverlay from "@/components/auth/AuthOverlay";
 import UsernameInterceptor from "@/components/auth/UsernameInterceptor";
 import ToastHub, { type ToastItem } from "@/components/auth/ToastHub";
@@ -104,9 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const providerMetadata = targetUser.user_metadata as { avatar_url?: string } | undefined;
-    const providerAvatarUrl = providerMetadata?.avatar_url || null;
-    if (data && !data.avatar_url && providerAvatarUrl) {
+    const discordAvatarUrl = getLinkedIdentityAvatarUrl(targetUser, "discord");
+    const googleAvatarUrl = getLinkedIdentityAvatarUrl(targetUser, "google");
+    const providerAvatarUrl = discordAvatarUrl || googleAvatarUrl;
+    if (data && providerAvatarUrl && data.avatar_url !== providerAvatarUrl) {
       const { data: updatedData } = await supabase
         .from("profiles")
         .update({ avatar_url: providerAvatarUrl })
@@ -309,6 +311,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    const shouldRefresh = searchParams.get("auth") === "1";
+    if (!shouldRefresh || !hasSupabaseEnv()) {
+      return;
+    }
+
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null);
+      void refreshProfileForUser(data.user ?? null);
+    });
+  }, [refreshProfileForUser, searchParams]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

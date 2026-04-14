@@ -8,6 +8,37 @@ export function isIdentityAlreadyLinkedError(message: string) {
   );
 }
 
+export function hasLinkedIdentity(user: { identities?: Array<{ provider?: string | null }> } | null, provider: string) {
+  return Boolean(user?.identities?.some((identity) => identity.provider === provider));
+}
+
+export function getLinkedIdentityAvatarUrl(
+  user: {
+    identities?: Array<{
+      provider?: string | null;
+      identity_data?: Record<string, unknown> | null;
+    }>;
+    user_metadata?: Record<string, unknown> | null;
+  } | null,
+  provider: string,
+) {
+  const identity = user?.identities?.find((entry) => entry.provider === provider);
+  const identityData = identity?.identity_data ?? null;
+  const identityAvatar =
+    (typeof identityData?.avatar_url === "string" && identityData.avatar_url) ||
+    (typeof identityData?.picture === "string" && identityData.picture) ||
+    (typeof identityData?.avatar === "string" && identityData.avatar) ||
+    null;
+
+  const metadata = user?.user_metadata ?? null;
+  const metadataAvatar =
+    (typeof metadata?.avatar_url === "string" && metadata.avatar_url) ||
+    (typeof metadata?.picture === "string" && metadata.picture) ||
+    null;
+
+  return identityAvatar || metadataAvatar || null;
+}
+
 export function isManualLinkingDisabledError(message: string) {
   const value = message.toLowerCase();
   return (
