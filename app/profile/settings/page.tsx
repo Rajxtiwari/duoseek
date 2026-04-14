@@ -3,6 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthCallbackUrl } from "@/lib/auth/config";
+import { getDiscordLinkErrorMessage, hasLinkedIdentity, isManualLinkingDisabledError } from "@/lib/auth/identity";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
 import GamerAvatar from "@/components/GamerAvatar";
 
@@ -25,7 +27,7 @@ function ageFromDate(date: string) {
 }
 
 export default function ProfileSettingsPage() {
-  const { user, profile, openAuthOverlay, refreshProfile } = useAuthOverlay();
+  const { user, profile, openAuthOverlay, refreshProfile, showToast } = useAuthOverlay();
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -45,8 +47,8 @@ export default function ProfileSettingsPage() {
 
   const age = ageFromDate(birthDate);
   const metadata = user?.user_metadata as { full_name?: string } | undefined;
-  const providers = (user?.app_metadata?.providers as string[] | undefined) ?? [];
-  const hasDiscord = providers.includes("discord");
+  const hasGoogle = hasLinkedIdentity(user, "google");
+  const hasDiscord = hasLinkedIdentity(user, "discord");
   const avatar = useMemo(() => profile?.avatar_url || null, [profile?.avatar_url]);
   const gamerHandle = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user?.email?.split("@")[0] || "player"}`;
 
@@ -56,6 +58,38 @@ export default function ProfileSettingsPage() {
     setPreferredGames((current) =>
       current.includes(game) ? current.filter((entry) => entry !== game) : [...current, game],
     );
+  };
+
+  const linkDiscordIdentity = async () => {
+    if (!user) {
+      openAuthOverlay("generic", "/profile/settings");
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const callbackUrl = getAuthCallbackUrl();
+      const { error } = await supabase.auth.linkIdentity({
+        provider: "discord",
+        options: {
+          redirectTo: `${callbackUrl}?next=${encodeURIComponent("/profile/settings")}&intent=generic`,
+        },
+      });
+
+      if (error) {
+        const manualLinkingDisabled = isManualLinkingDisabledError(error.message);
+        showToast({
+          title: manualLinkingDisabled ? "Discord linking unavailable" : "Discord connect failed",
+          description: getDiscordLinkErrorMessage(error.message),
+          variant: "error",
+        });
+        return;
+      }
+
+      showToast({ title: "Discord connected", description: "Your Discord account is now linked.", variant: "success" });
+    } catch {
+      showToast({ title: "Discord connect canceled", description: "No changes were made.", variant: "info" });
+    }
   };
 
   const saveLevelOne = async () => {
@@ -243,6 +277,32 @@ export default function ProfileSettingsPage() {
         </div>
 
         <div className="mt-6">
+          <div className="mb-6 rounded-xl border border-white/10 bg-zinc-900/35 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-zinc-400">Connected Accounts</p>
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-zinc-900/40 px-3 py-2">
+                <span className="text-sm text-zinc-200">Google</span>
+                <span className={`text-xs ${hasGoogle ? "text-emerald-300" : "text-zinc-400"}`}>
+                  {hasGoogle ? "Connected ✓" : "Not connected"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-zinc-900/40 px-3 py-2">
+                <span className="text-sm text-zinc-200">Discord</span>
+                {hasDiscord ? (
+                  <span className="text-xs text-emerald-300">Connected ✓</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void linkDiscordIdentity()}
+                    className="rounded-md border border-amber-400/35 bg-amber-900/20 px-3 py-1 text-xs text-amber-200"
+                  >
+                    Link Discord Account
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
             <motion.div className="h-full rounded-full bg-gradient-to-r from-purple-500 to-cyan-500" animate={{ width: `${progress}%` }} transition={spring} />
           </div>

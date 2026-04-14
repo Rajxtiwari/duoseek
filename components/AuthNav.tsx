@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { getAuthCallbackUrl } from "@/lib/auth/config";
+import { getDiscordLinkErrorMessage, hasLinkedIdentity, isManualLinkingDisabledError } from "@/lib/auth/identity";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthOverlay } from "@/components/auth/AuthProvider";
@@ -24,30 +25,36 @@ export default function AuthNav() {
     );
   }
 
-  const handleConnectProvider = async (provider: "google" | "discord") => {
+  const handleConnectDiscord = async () => {
     try {
+      if (!user) {
+        showToast({ title: "Sign in first", description: "Log in, then link your Discord account.", variant: "info" });
+        return;
+      }
+
       const supabase = createClient();
       const currentPath = pathname + (searchParams.size ? `?${searchParams.toString()}` : "");
       const callbackUrl = getAuthCallbackUrl();
       const redirectTo = `${callbackUrl}?next=${encodeURIComponent(currentPath)}&intent=generic`;
-      const authAction = user
-        ? supabase.auth.linkIdentity({
-            provider,
-            options: { redirectTo },
-          })
-        : supabase.auth.signInWithOAuth({
-            provider,
-            options: { redirectTo },
-          });
+      const authAction = supabase.auth.linkIdentity({
+        provider: "discord",
+        options: { redirectTo },
+      });
 
       const { error } = await authAction;
       if (error) {
-        const label = provider === "discord" ? "Discord" : "Google";
-        showToast({ title: `${label} connect failed`, description: error.message, variant: "error" });
+        const manualLinkingDisabled = isManualLinkingDisabledError(error.message);
+        showToast({
+          title: manualLinkingDisabled ? "Discord linking unavailable" : "Discord connect failed",
+          description: getDiscordLinkErrorMessage(error.message),
+          variant: "error",
+        });
+        return;
       }
+
+      showToast({ title: "Discord connected", description: "Your account now supports Discord login.", variant: "success" });
     } catch {
-      const title = provider === "discord" ? "Discord connect canceled" : "Google connect canceled";
-      showToast({ title, description: "No changes were made.", variant: "info" });
+      showToast({ title: "Discord connect canceled", description: "No changes were made.", variant: "info" });
     }
   };
 
@@ -64,28 +71,17 @@ export default function AuthNav() {
   }
 
   const metadata = user.user_metadata as { full_name?: string } | undefined;
-  const providers = (user.app_metadata?.providers as string[] | undefined) ?? [];
-  const hasDiscord = providers.includes("discord");
-  const hasGoogle = providers.includes("google");
+  const hasDiscord = hasLinkedIdentity(user, "discord");
   const handleText = profile?.gamer_handle ? `@${profile.gamer_handle}` : `@${user.email?.split("@")[0] || "player"}`;
   const avatarUrl = profile?.avatar_url || null;
   const initials = (profile?.gamer_handle || metadata?.full_name || "P").slice(0, 1).toUpperCase();
 
   return (
     <div className="flex items-center gap-3">
-      {!hasGoogle && (
-        <button
-          type="button"
-          onClick={() => void handleConnectProvider("google")}
-          className="hidden xl:inline px-3 py-1.5 rounded-lg border border-emerald-400/35 bg-emerald-900/20 text-emerald-200 text-xs"
-        >
-          Connect Google
-        </button>
-      )}
       {!hasDiscord && (
         <button
           type="button"
-          onClick={() => void handleConnectProvider("discord")}
+          onClick={() => void handleConnectDiscord()}
           className="hidden xl:inline px-3 py-1.5 rounded-lg border border-amber-400/35 bg-amber-900/20 text-amber-200 text-xs"
         >
           Connect Discord to unlock benefits
