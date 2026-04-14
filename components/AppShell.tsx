@@ -15,6 +15,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="hidden md:flex items-center gap-8">
             {[
+              { label: "Dashboard", href: "/dashboard" },
               { label: "Lobby", href: "/lobby" },
               { label: "Shuffle", href: "/shuffle" },
               { label: "How It Works", href: "/how-it-works" },
@@ -37,6 +38,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </Link>
             <nav className="flex flex-wrap items-center gap-6">
               {[
+                { label: "Dashboard", href: "/dashboard" },
                 { label: "Lobby", href: "/lobby" },
                 { label: "Shuffle", href: "/shuffle" },
                 { label: "How it Works", href: "/how-it-works" },

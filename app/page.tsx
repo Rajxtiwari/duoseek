@@ -1,13 +1,5 @@
-import Hero from "@/components/Hero";
-import Features from "@/components/Features";
-import ShufflePreview from "@/components/ShufflePreview";
+import HomeExperience from "@/components/HomeExperience";
 
 export default function Home() {
-  return (
-    <main>
-      <Hero />
-      <Features />
-      <ShufflePreview />
-    </main>
-  );
+  return <HomeExperience />;
 }
